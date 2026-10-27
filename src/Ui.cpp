@@ -12,6 +12,9 @@ constexpr uint16_t kColorAccent = 0x07FF;     // シアン
 constexpr uint16_t kColorBar = 0x2124;
 constexpr uint16_t kColorBarPressed = 0x4A69;
 constexpr uint16_t kColorIcon = 0xFFFF;
+// 再生速度 (%) の巡回順。タップごとに次へ進み、末尾の次は先頭に戻る。
+constexpr uint8_t kSpeedPercents[] = {100, 95, 90, 85, 80};
+constexpr size_t kSpeedCount = sizeof(kSpeedPercents) / sizeof(kSpeedPercents[0]);
 }  // namespace
 
 void Ui::begin(Playlist* playlist, Player* player) {
@@ -54,9 +57,10 @@ void Ui::update() {
   uint32_t elapsed = _player->elapsedSec();
   uint8_t progress = _player->progressPercent();
   uint8_t volume = M5.Speaker.getVolume();
+  uint8_t speed = _player->speedPercent();
 
   bool stateChanged = _forceRedraw || gen != _drawnGeneration;
-  if (stateChanged || elapsed != _drawnElapsed || volume != _drawnVolume) drawHeader();
+  if (stateChanged || elapsed != _drawnElapsed || volume != _drawnVolume || speed != _drawnSpeed) drawHeader();
   if (stateChanged || progress != _drawnProgress) drawProgress();
   if (stateChanged || _scroll != _drawnScroll) drawList();
   if (stateChanged || _touchButton != _drawnTouchButton || state != _drawnState) drawBar();
@@ -68,17 +72,21 @@ void Ui::update() {
   _drawnElapsed = elapsed;
   _drawnProgress = progress;
   _drawnVolume = volume;
+  _drawnSpeed = speed;
   _drawnTouchButton = _touchButton;
   _drawnState = state;
 }
 
 void Ui::handleTouch() {
   const auto& t = M5.Touch.getDetail();
+  const bool inHeader = t.base_y < kHeaderH;
   const bool inList = t.base_y >= kListY && t.base_y < kListY + kRows * kRowH;
   const bool inBar = t.base_y >= kBarY && t.base_y < kBarY + kBarH;
 
   if (t.wasPressed()) {
-    if (inList) {
+    if (inHeader) {
+      _headerTouch = true;
+    } else if (inList) {
       _dragging = true;
       _dragStartScroll = _scroll;
     } else if (inBar) {
@@ -92,7 +100,9 @@ void Ui::handleTouch() {
   }
 
   if (t.wasClicked()) {
-    if (inList && _dragging) {
+    if (inHeader && _headerTouch) {
+      cycleSpeed();
+    } else if (inList && _dragging) {
       int row = (t.base_y - kListY) / kRowH;
       size_t idx = static_cast<size_t>(_scroll + row);
       if (idx < _playlist->size()) {
@@ -106,6 +116,7 @@ void Ui::handleTouch() {
 
   if (t.wasReleased()) {
     _dragging = false;
+    _headerTouch = false;
     _touchButton = BtnNone;
   }
 }
@@ -133,6 +144,19 @@ void Ui::changeVolume(int delta) {
   if (v > 255) v = 255;
   M5.Speaker.setVolume(static_cast<uint8_t>(v));
   M5.Speaker.tone(1000, 30);
+}
+
+void Ui::cycleSpeed() {
+  uint8_t current = _player->speedPercent();
+  size_t next = 0;  // 表にない値なら等速 (先頭) に戻す
+  for (size_t i = 0; i < kSpeedCount; ++i) {
+    if (kSpeedPercents[i] == current) {
+      next = (i + 1) % kSpeedCount;
+      break;
+    }
+  }
+  _player->setSpeedPercent(kSpeedPercents[next]);
+  M5.Speaker.tone(1500, 30);
 }
 
 int Ui::clampScroll(int scroll) const {
@@ -174,10 +198,22 @@ void Ui::drawHeader() {
   d.fillRect(0, 0, kWidth, kHeaderH, kColorHeader);
   d.setTextDatum(textdatum_t::top_left);
 
-  // 1行目: 曲名
+  // 1行目右側: 再生速度 (x1.00 など)。音量表示 (x >= kSideX) の左隣に置く。
+  // 等速以外はアクセント色で目立たせる。
+  uint8_t speed = _player->speedPercent();
+  char speedText[8];
+  snprintf(speedText, sizeof(speedText), "x%u.%02u", (unsigned)(speed / 100), (unsigned)(speed % 100));
+  constexpr int speedRight = kSideX - 10;
+  int speedLeft = speedRight - d.textWidth(speedText);
+  d.setTextColor(speed == 100 ? kColorTextDim : kColorAccent, kColorHeader);
+  d.setTextDatum(textdatum_t::top_right);
+  d.drawString(speedText, speedRight, 5);
+  d.setTextDatum(textdatum_t::top_left);
+
+  // 1行目: 曲名 (速度表示に重ならないよう、その手前で切る)
   String title = (index >= 0) ? _playlist->displayName(index) : String("MP3 Player");
   d.setTextColor(kColorText, kColorHeader);
-  d.setClipRect(0, 0, kWidth - 4, 24);
+  d.setClipRect(0, 0, speedLeft - 6, 24);
   d.drawString(title, 6, 5);
   d.clearClipRect();
 
@@ -189,7 +225,7 @@ void Ui::drawHeader() {
   d.drawString(line2, 6, 27);
 
   // 右側: 音量バー
-  constexpr int vx = 232, vy = 31, vw = 80, vh = 8;
+  constexpr int vx = kSideX, vy = 31, vw = 80, vh = 8;
   int fill = M5.Speaker.getVolume() * vw / 255;
   d.drawRect(vx, vy, vw, vh, kColorTextDim);
   d.fillRect(vx + 1, vy + 1, fill > 2 ? fill - 2 : 0, vh - 2, kColorAccent);

@@ -40,6 +40,10 @@ class Player {
   /// 状態 (曲番号 / 再生状態) が変わるたびに増える。UI の再描画判定用。
   uint32_t generation() const { return _generation.load(); }
 
+  /// 再生速度 (%)。100 で等速。デコードタスクが次のバッファから反映するのでキューを通さない。
+  void setSpeedPercent(uint8_t percent) { _out.setSpeedPercent(percent); }
+  uint8_t speedPercent() const { return _out.speedPercent(); }
+
  private:
   struct Command {
     enum Type : uint8_t { Play, TogglePause, Next, Prev, Stop } type;

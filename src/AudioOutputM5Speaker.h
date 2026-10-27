@@ -39,7 +39,9 @@ class AudioOutputM5Speaker : public AudioOutput {
     if (_fill == 0) return;
     // playRaw より前に busy を立てる: 解放通知はキュー投入後にしか来ない。
     _busy[_index] = true;
-    bool queued = _speaker->playRaw(_buffer[_index], _fill, hertz, true, 1, _virtualCh);
+    // 再生速度: スピーカーに申告するサンプルレートを倍率分ずらす (音程も一緒に変わる)
+    uint32_t rate = static_cast<uint32_t>(static_cast<uint64_t>(hertz) * _speedPercent.load() / 100);
+    bool queued = _speaker->playRaw(_buffer[_index], _fill, rate, true, 1, _virtualCh);
     if (queued) {
       _frames += _fill / 2;
     } else {
@@ -67,6 +69,11 @@ class AudioOutputM5Speaker : public AudioOutput {
   /// 曲の切り替え時に呼び、再生フレーム数を 0 に戻す。
   void resetFrames() { _frames = 0; }
 
+  /// 再生速度 (%)。100 で等速。次に flush() されるバッファから反映される。
+  /// frames() はデコーダが出したフレーム数のままなので、経過時間は曲内の位置を指し続ける。
+  void setSpeedPercent(uint8_t percent) { _speedPercent = percent; }
+  uint8_t speedPercent() const { return _speedPercent.load(); }
+
  private:
   static constexpr size_t kBufCount = 3;
   // int16 単位 (ステレオ 2048 フレーム ≒ 44.1kHz で 46ms)。
@@ -88,4 +95,5 @@ class AudioOutputM5Speaker : public AudioOutput {
   size_t _fill = 0;
   size_t _index = 0;
   std::atomic<uint32_t> _frames{0};
+  std::atomic<uint8_t> _speedPercent{100};
 };

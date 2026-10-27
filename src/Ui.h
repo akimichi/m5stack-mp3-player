@@ -2,7 +2,7 @@
 //
 // 320x240 の LCD にファイル一覧と再生状態を描き、タッチと BtnA/B/C を処理する。
 //
-//  y   0..47   ヘッダ (曲名 / 状態・経過時間 / 音量)
+//  y   0..47   ヘッダ (曲名 / 状態・経過時間 / 音量 / 再生速度。タップで速度を巡回)
 //  y  48..53   進捗バー
 //  y  54..203  ファイル一覧 (25px x 6 行、タップで再生、上下ドラッグでスクロール)
 //  y 204..239  操作ボタン [Vol-] [|<] [>/||] [>|] [Vol+]
@@ -36,6 +36,8 @@ class Ui {
   static constexpr int kButtons = 5;
   static constexpr int kButtonW = kWidth / kButtons;
   static constexpr int kVolumeStep = 16;
+  // ヘッダ右側 (x >= kSideX) に音量バーと速度表示を置き、曲名はその手前で切る
+  static constexpr int kSideX = 232;
 
   enum Button : int8_t { BtnNone = -1, BtnVolDown = 0, BtnPrev, BtnPlay, BtnNext, BtnVolUp };
 
@@ -43,6 +45,7 @@ class Ui {
   void handleHardButtons();
   void pressButton(Button b);
   void changeVolume(int delta);
+  void cycleSpeed();
   int clampScroll(int scroll) const;
   void ensureVisible(int index);
 
@@ -59,6 +62,7 @@ class Ui {
 
   int _scroll = 0;             // 一覧の先頭行の曲番号
   bool _dragging = false;      // 一覧内でタッチが始まった
+  bool _headerTouch = false;   // ヘッダ内でタッチが始まった
   int _dragStartScroll = 0;
   Button _touchButton = BtnNone;  // 押下中の画面下ボタン
 
@@ -70,6 +74,7 @@ class Ui {
   uint32_t _drawnElapsed = 0;
   uint8_t _drawnProgress = 0;
   uint8_t _drawnVolume = 0;
+  uint8_t _drawnSpeed = 0;
   Button _drawnTouchButton = BtnNone;
   PlayerState _drawnState = PlayerState::Stopped;
 };
