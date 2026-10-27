@@ -13,6 +13,7 @@
 
 #include "Player.h"
 #include "Playlist.h"
+#include "Settings.h"
 
 class Ui {
  public:
@@ -46,6 +47,7 @@ class Ui {
   void pressButton(Button b);
   void changeVolume(int delta);
   void cycleSpeed();
+  static bool isValidSpeed(uint8_t percent);
   int clampScroll(int scroll) const;
   void ensureVisible(int index);
 
@@ -59,6 +61,7 @@ class Ui {
 
   Playlist* _playlist = nullptr;
   Player* _player = nullptr;
+  Settings _settings;
 
   int _scroll = 0;             // 一覧の先頭行の曲番号
   bool _dragging = false;      // 一覧内でタッチが始まった

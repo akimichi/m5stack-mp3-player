@@ -26,6 +26,10 @@ void Ui::begin(Playlist* playlist, Player* player) {
   d.setTextWrap(false);
   d.fillScreen(kColorBg);
   _forceRedraw = true;
+
+  // 前回の再生速度を復元する。保存値が表にない (将来の変更など) なら等速にする。
+  uint8_t speed = _settings.loadSpeedPercent(kSpeedPercents[0]);
+  _player->setSpeedPercent(isValidSpeed(speed) ? speed : kSpeedPercents[0]);
 }
 
 void Ui::showMessage(const char* line1, const char* line2) {
@@ -156,7 +160,15 @@ void Ui::cycleSpeed() {
     }
   }
   _player->setSpeedPercent(kSpeedPercents[next]);
+  _settings.saveSpeedPercent(kSpeedPercents[next]);
   M5.Speaker.tone(1500, 30);
+}
+
+bool Ui::isValidSpeed(uint8_t percent) {
+  for (size_t i = 0; i < kSpeedCount; ++i) {
+    if (kSpeedPercents[i] == percent) return true;
+  }
+  return false;
 }
 
 int Ui::clampScroll(int scroll) const {
